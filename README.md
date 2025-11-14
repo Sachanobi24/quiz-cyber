@@ -8,4 +8,4 @@ Technologies utilisées :
 - HTML, CSS, JavaScript
 - Next.js
 - Supabase
-Auteur : Prénom Nom 
+Auteur : Mathys,Hugo,Aurelien Yssoufi 
