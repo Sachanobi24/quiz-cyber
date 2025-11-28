@@ -14,7 +14,15 @@ export default function Home() {
     async function fetchQuestion() {
       const { data, error } = await supabase
         .from('question')
-        .select('*')
+        .select(`
+            id,
+            texte,
+            reponses:reponse (
+            id,
+            texte,
+            bonne_reponse
+             )
+          `)
         .limit(1);
 
       if (error) console.error(error);
@@ -24,31 +32,51 @@ export default function Home() {
     fetchQuestion();
   }, []);
 
-return (
-  <div className="w-full flex justify-center mt-10">
+  function handleClick(reponse: any) {
+    if (reponse.bonne_reponse) {
+      alert("Bonne réponse !");
+    } else {
+      alert("Mauvaise réponse.");
+    }
+  }
 
-    <Card className="relative max-w-xl w-full">
+  return (
+    <div className="w-full flex justify-center mt-10">
 
-      {/* Boutons à droite de la carte */}
-      <div className="absolute right-[-60px] top-1/2 -translate-y-1/2 flex flex-col gap-4">
-        <Button variant="outline" size="icon" className="rounded-full">
-          <ArrowUpRightIcon />
-        </Button>
-        <Button variant="outline" size="icon" className="rounded-full">
-          <ArrowDownLeftIcon />
-        </Button>
-      </div>
+      <Card className="relative max-w-xl w-full">
 
-      {/* Contenu de la question */}
-      <CardHeader>
-        <CardTitle className="text-center">Question</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-center">{question?.texte}</p>
-      </CardContent>
+        {/* Boutons à droite de la carte */}
+        <div className="absolute right-[-60px] top-1/2 -translate-y-1/2 flex flex-col gap-4">
+          <Button variant="outline" size="icon" className="rounded-full">
+            <ArrowUpRightIcon />
+          </Button>
+          <Button variant="outline" size="icon" className="rounded-full">
+            <ArrowDownLeftIcon />
+          </Button>
+        </div>
 
-    </Card>
-  </div>
-);
+        {/* Contenu de la question */}
+        <CardHeader>
+          <CardTitle className="text-center">Question</CardTitle>
+        </CardHeader>
+        <CardContent>
 
+          <p className="text-center">{question?.texte}</p>
+
+          {question && question.reponses.map((reponse: any) => (
+              <Button
+                key={reponse.id}
+                onClick={() => handleClick(reponse)}
+                className="w-full justify-start mt-4"
+                variant="outline"
+              >
+                {reponse.texte}
+              </Button>
+          ))}
+
+        </CardContent>
+      </Card>
+
+    </div>
+  );
 }
