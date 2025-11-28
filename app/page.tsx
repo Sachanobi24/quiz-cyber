@@ -1,5 +1,9 @@
 "use client"
 
+
+import { ArrowDownLeftIcon } from "lucide-react"
+import { ArrowUpRightIcon } from "lucide-react"
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
@@ -20,21 +24,31 @@ export default function Home() {
     fetchQuestion();
   }, []);
 
-  return (
-    <div>
-      {
-        question ? (
-          <Card className="max-w-xl mx-auto mt-6" >
-            <CardHeader>
-              <CardTitle>Question</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p>{question.texte}</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <p>Chargement de la question...</p>
-        )
-      }
-    </div>);
+return (
+  <div className="w-full flex justify-center mt-10">
+
+    <Card className="relative max-w-xl w-full">
+
+      {/* Boutons à droite de la carte */}
+      <div className="absolute right-[-60px] top-1/2 -translate-y-1/2 flex flex-col gap-4">
+        <Button variant="outline" size="icon" className="rounded-full">
+          <ArrowUpRightIcon />
+        </Button>
+        <Button variant="outline" size="icon" className="rounded-full">
+          <ArrowDownLeftIcon />
+        </Button>
+      </div>
+
+      {/* Contenu de la question */}
+      <CardHeader>
+        <CardTitle className="text-center">Question</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-center">{question?.texte}</p>
+      </CardContent>
+
+    </Card>
+  </div>
+);
+
 }
