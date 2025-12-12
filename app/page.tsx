@@ -1,225 +1,169 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { supabase } from "../lib/supabaseClient"
-import { motion, AnimatePresence } from "framer-motion"
-
-import { ArrowDownLeftIcon, ArrowUpRightIcon } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect } from "react";
+import { supabase } from "../lib/supabaseClient";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface Reponse {
-  id: number
-  texte: string
-  bonne_reponse: boolean
+  id: number;
+  texte: string;
+  bonne_reponse: boolean;
 }
 
 interface Question {
-  id: number
-  texte: string
-  reponses: Reponse[]
-  attempts: number
-  completed: boolean
+  id: number;
+  texte: string;
+  reponses: Reponse[];
+  attempts: number;
+  completed: boolean;
+  isRetry?: boolean;
 }
 
-export default function Home() {
-  const [questions, setQuestions] = useState<Question[]>([])
-  const [currentIndex, setCurrentIndex] = useState<number>(0)
-  const [failedQuestions, setFailedQuestions] = useState<Question[]>([])
-  const [direction, setDirection] = useState<number>(0)
-  const [quizFinished, setQuizFinished] = useState<boolean>(false)
+interface Feedback {
+  message: string;
+  type: "success" | "error";
+}
+
+export default function Quiz() {
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [failedQuestions, setFailedQuestions] = useState<Question[]>([]);
+  const [answered, setAnswered] = useState<number[]>([]);
+  const [currentIndex, setCurrentIndex] = useState<number>(0);
+  const [score, setScore] = useState<number>(0);
+  const [quizFinished, setQuizFinished] = useState<boolean>(false);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [theme, setTheme] = useState<string>("light");
 
   useEffect(() => {
     async function fetchQuestions() {
       const { data, error } = await supabase
         .from("question")
-        .select(`
-          id,
-          texte,
-          reponses:reponse (
-            id,
-            texte,
-            bonne_reponse
-          )
-        `)
+        .select(`id, texte, reponses:reponse(id, texte, bonne_reponse)`);
 
-      if (error) console.error(error)
-      else {
-        const formatted = data.map((q: any) => ({
-          ...q,
-          attempts: 0,
-          completed: false
-        }))
-        setQuestions(formatted)
+      if (error) {
+        console.error(error);
+        return;
       }
+
+      const formatted: Question[] = data.map((q: any) => ({
+        ...q,
+        attempts: 0,
+        completed: false,
+      }));
+
+      setQuestions(formatted);
     }
-    fetchQuestions()
-  }, [])
+
+    fetchQuestions();
+  }, []);
+
+  const showFeedback = (message: string, type: "success" | "error") => {
+    setFeedback({ message, type });
+    setTimeout(() => setFeedback(null), 1500);
+  };
 
   const handleClick = (reponse: Reponse) => {
-    const currentQ = { ...questions[currentIndex] }
-    currentQ.attempts += 1
+    if (!questions[currentIndex]) return;
+
+    const updatedQuestions = [...questions];
+    const updatedFailed = [...failedQuestions];
+    const currentQ = { ...updatedQuestions[currentIndex] };
+    currentQ.attempts += 1;
 
     if (reponse.bonne_reponse) {
-      alert(`Bonne réponse ! ✅ Tentatives: ${currentQ.attempts}`)
-      currentQ.completed = true
+      currentQ.completed = true;
+      showFeedback("Bonne réponse ! ✅", "success");
+      setScore(prev => prev + 1);
+      setAnswered(prev => [...prev, currentQ.id]);
+      const newQuestions = updatedQuestions.filter(q => q.id !== currentQ.id);
+      const newFailed = updatedFailed.filter(q => q.id !== currentQ.id);
+      setQuestions(newQuestions);
+      setFailedQuestions(newFailed);
     } else {
-      alert(`Mauvaise réponse ❌ Tentatives: ${currentQ.attempts}`)
-      if (!failedQuestions.find(q => q.id === currentQ.id) && !currentQ.completed) {
-        setFailedQuestions([...failedQuestions, currentQ])
-      }
+      showFeedback("Mauvaise réponse ❌", "error");
+      if (!updatedFailed.find(q => q.id === currentQ.id)) updatedFailed.push(currentQ);
+      setFailedQuestions(updatedFailed);
     }
 
-    // Mettre à jour la question courante
-    const updatedQuestions = [...questions]
-    updatedQuestions[currentIndex] = currentQ
-    setQuestions(updatedQuestions)
-
-    nextQuestion()
-  }
-
-  const nextQuestion = () => {
-    let next = currentIndex + 1
-
-    if (next < questions.length) {
-      setDirection(1)
-      setCurrentIndex(next)
-    } else if (failedQuestions.length > 0) {
-      // Repasse uniquement les questions non complétées
-      const toRetry = failedQuestions.filter(q => !q.completed)
-      if (toRetry.length > 0) {
-        setQuestions(toRetry.map(q => ({ ...q })))
-        setFailedQuestions([])
-        setCurrentIndex(0)
-        setDirection(1)
-      } else {
-        setQuizFinished(true)
-      }
+    // Si plus de questions restantes, retry des questions ratées
+    if (updatedQuestions.length > 0) {
+      setCurrentIndex(prev => (prev >= updatedQuestions.length ? updatedQuestions.length - 1 : prev));
+    } else if (updatedFailed.length > 0) {
+      const retryQs = updatedFailed.map(q => ({ ...q, isRetry: true }));
+      setQuestions(retryQs);
+      setFailedQuestions([]);
+      setCurrentIndex(0);
     } else {
-      setQuizFinished(true)
+      setQuizFinished(true);
     }
-  }
-
-  const prevQuestion = () => {
-    if (currentIndex > 0) {
-      setDirection(-1)
-      setCurrentIndex(currentIndex - 1)
-    }
-  }
-
-  if (questions.length === 0) return <p>Chargement...</p>
+  };
 
   if (quizFinished) {
     return (
-      <div className="w-full max-w-2xl mx-auto mt-10">
-        <h2 className="text-center text-2xl font-bold mb-6">Tableau des scores</h2>
-        <table className="w-full border-collapse border border-gray-300 dark:border-gray-600">
-          <thead>
-            <tr className="bg-gray-100 dark:bg-gray-700">
-              <th className="border border-gray-300 dark:border-gray-600 p-2">Question</th>
-              <th className="border border-gray-300 dark:border-gray-600 p-2">Tentatives</th>
-              <th className="border border-gray-300 dark:border-gray-600 p-2">Bonne réponse</th>
-            </tr>
-          </thead>
-          <tbody>
-            {questions.map((q) => {
-              const bonneReponse = q.reponses.find(r => r.bonne_reponse)?.texte || ""
-              return (
-                <tr key={q.id} className="text-center">
-                  <td className="border border-gray-300 dark:border-gray-600 p-2">{q.texte}</td>
-                  <td className="border border-gray-300 dark:border-gray-600 p-2">{q.attempts}</td>
-                  <td className="border border-gray-300 dark:border-gray-600 p-2">{bonneReponse}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-        <div className="text-center mt-6">
+      <div className={`min-h-screen p-6 ${theme === "light" ? "bg-white text-black" : "bg-gray-900 text-white"}`}>
+        <div className="max-w-xl mx-auto text-center">
+          <h2 className="text-2xl font-bold mb-4">🎉 Quiz terminé !</h2>
+          <p className="mb-4">Score : {score}</p>
           <Button
             onClick={() => {
-              // Réinitialiser le quiz
-              const resetQuestions = questions.map(q => ({ ...q, attempts: 0, completed: false }))
-              setQuestions(resetQuestions)
-              setFailedQuestions([])
-              setCurrentIndex(0)
-              setQuizFinished(false)
+              const allQs = [...questions, ...failedQuestions].map(q => ({ ...q, attempts: 0, completed: false }));
+              setQuestions(allQs);
+              setFailedQuestions([]);
+              setAnswered([]);
+              setScore(0);
+              setQuizFinished(false);
+              setCurrentIndex(0);
             }}
           >
-            Recommencer le quiz
+            Rejouer
           </Button>
         </div>
       </div>
-    )
+    );
   }
 
-  const currentQuestion = questions[currentIndex]
-
-  const variants = {
-    enter: (dir: number) => ({ x: dir > 0 ? 300 : -300, opacity: 0, scale: 0.95 }),
-    center: { x: 0, opacity: 1, scale: 1 },
-    exit: (dir: number) => ({ x: dir < 0 ? 300 : -300, opacity: 0, scale: 0.95 })
-  }
+  const currentQuestion = questions[currentIndex];
+  if (!currentQuestion) return <p className={`min-h-screen p-6 ${theme === "light" ? "bg-white text-black" : "bg-gray-900 text-white"}`}>Chargement...</p>;
 
   return (
-    <div className="w-full flex flex-col items-center mt-10 gap-6 relative">
-      <div className="relative w-full max-w-xl">
-        <AnimatePresence custom={direction} mode="wait">
-          {currentQuestion && (
-            <motion.div
-              key={currentQuestion.id}
-              custom={direction}
-              variants={variants}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={{ duration: 0.5, ease: "easeOut" }}
-            >
-              <Card className="relative w-full bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 transition-colors duration-300">
-                <div className="absolute right-[-60px] top-1/2 -translate-y-1/2 flex flex-col gap-4">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={nextQuestion}
-                    disabled={currentIndex >= questions.length - 1 && failedQuestions.length === 0}
-                  >
-                    <ArrowUpRightIcon />
+    <div className={`min-h-screen p-6 transition ${theme === "light" ? "bg-white text-black" : "bg-gray-900 text-white"}`}>
+      <div className="flex justify-end mb-4">
+        <Button onClick={() => setTheme(theme === "light" ? "dark" : "light")}>{theme === "light" ? "🌙 Nuit" : "☀️ Jour"}</Button>
+      </div>
+
+      <div className="max-w-xl mx-auto">
+        <AnimatePresence>
+          <motion.div key={currentQuestion.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <Card className={`p-4 rounded-2xl mb-4 ${currentQuestion.isRetry ? "bg-orange-100 dark:bg-orange-600" : "bg-white dark:bg-gray-800"}`}>
+              <CardHeader>
+                <CardTitle>Question {currentIndex + 1}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="mb-4">{currentQuestion.texte}</p>
+                {currentQuestion.reponses.map(r => (
+                  <Button key={r.id} className="w-full mb-2" onClick={() => handleClick(r)}>
+                    {r.texte}
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={prevQuestion}
-                    disabled={currentIndex <= 0}
+                ))}
+                {feedback && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className={`mt-2 p-2 rounded text-center font-semibold ${
+                      feedback.type === "success" ? "bg-green-500 text-white" : "bg-red-500 text-white"
+                    }`}
                   >
-                    <ArrowDownLeftIcon />
-                  </Button>
-                </div>
-
-                <CardHeader>
-                  <CardTitle className="text-center">Question {currentIndex + 1}</CardTitle>
-                </CardHeader>
-
-                <CardContent>
-                  <p className="text-center">{currentQuestion.texte}</p>
-
-                  {currentQuestion.reponses.map((reponse: Reponse) => (
-                    <Button
-                      key={reponse.id}
-                      onClick={() => handleClick(reponse)}
-                      className="w-full justify-start mt-4 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 transition-colors duration-300 hover:scale-105 hover:shadow-lg"
-                    >
-                      {reponse.texte}
-                    </Button>
-                  ))}
-
-                  <p className="mt-2 text-sm text-center text-gray-500 dark:text-gray-400">
-                    Tentatives sur cette question : {currentQuestion.attempts}
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
+                    {feedback.message}
+                  </motion.div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
         </AnimatePresence>
       </div>
     </div>
-  )
+  );
 }
