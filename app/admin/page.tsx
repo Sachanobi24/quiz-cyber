@@ -58,7 +58,7 @@ export default function AdminPage() {
 
   async function fetchStats() {
     const { data, error } = await supabase.rpc("global_stats");
-    if (error) console.error(error);
+    if (error) console.log(error);
     else if (data && data.length > 0) setStats(data[0]);
     else setStats({ total: 0, good: 0 });
   }

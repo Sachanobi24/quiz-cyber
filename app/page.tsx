@@ -19,10 +19,10 @@ export default function LoginPage() {
 
   const handleLogin = async () => {
     setError("");
+    console.log("handleLogin", { email });
 
     if (!email) return setError("Merci de mettre un email");
 
-    // LOGIN ADMIN
     if (email === ADMIN_EMAIL) {
       if (password === ADMIN_PASSWORD) {
         localStorage.setItem("joueurEmail", email);
@@ -33,49 +33,83 @@ export default function LoginPage() {
       return;
     }
 
-    // LOGIN JOUEUR
-    const { data } = await supabase
-      .from("joueur")
-      .select("*")
-      .eq("email", email)
-      .single();
+    try {
+      const resp = await supabase
+        .from("joueur")
+        .select("*")
+        .eq("email", email)
+        .single();
 
-    if (data) {
-      // Joueur existe
-      localStorage.setItem("joueurEmail", email);
-      router.push("/quiz");
-    } else {
-      setError("Joueur non trouvé. Veuillez vous inscrire.");
+      console.log("supabase login response:", resp);
+
+      if (resp.error) {
+        // erreur précisée par supabase
+        setError(resp.error.message || "Erreur Supabase lors de la recherche");
+        return;
+      }
+
+      if (resp.data) {
+        localStorage.setItem("joueurEmail", email);
+        router.push("/quiz");
+      } else {
+        setError("Joueur non trouvé. Veuillez vous inscrire.");
+      }
+    } catch (err) {
+      console.error("Exception login:", err);
+      setError("Erreur lors de la requête. Voir console devtools.");
     }
   };
 
   const handleRegister = async () => {
     setError("");
+    console.log("handleRegister", { nom, email });
 
     if (!nom || !email) return setError("Merci de remplir le nom et l'email");
 
-    // Vérifie si le joueur existe déjà
-    const { data: existing } = await supabase
-      .from("joueur")
-      .select("*")
-      .eq("email", email)
-      .single();
+    try {
+      // vérifie si existe
+      const check = await supabase
+        .from("joueur")
+        .select("id,email")
+        .eq("email", email)
+        .maybeSingle(); // peut retourner null
 
-    if (existing) {
-      return setError("Ce joueur existe déjà, essayez de vous connecter.");
-    }
+      console.log("check existing:", check);
 
-    // Ajoute le joueur à la table joueur
-    const { error } = await supabase.from("joueur").insert({
-      nom,
-      email
-    });
+      if (check.error) {
+        setError(check.error.message || "Erreur Supabase lors de la vérif.");
+        return;
+      }
 
-    if (error) {
-      setError("Erreur lors de l'inscription.");
-    } else {
+      if (check.data) {
+        return setError("Ce joueur existe déjà, essayez de vous connecter.");
+      }
+
+      // insert et demander la ligne insérée (.select())
+      const insertResp = await supabase
+        .from("joueur")
+        .insert({
+          nom,
+          email,
+          // si ta table a des colonnes obligatoires, ajoute-les ici :
+          // date_inscription: null,
+          // created_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      console.log("insertResp:", insertResp);
+
+      if (insertResp.error) {
+        setError(insertResp.error.message || "Erreur lors de l'inscription.");
+        return;
+      }
+
       localStorage.setItem("joueurEmail", email);
       router.push("/quiz");
+    } catch (err) {
+      console.error("Exception register:", err);
+      setError("Erreur lors de la requête d'inscription. Voir console.");
     }
   };
 
