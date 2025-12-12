@@ -1,168 +1,154 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { supabase } from "../lib/supabaseClient";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { motion, AnimatePresence } from "framer-motion";
+import { supabase } from "@/lib/supabaseClient";
 
-interface Reponse {
-  id: number;
-  texte: string;
-  bonne_reponse: boolean;
-}
+const ADMIN_EMAIL = "admin";
+const ADMIN_PASSWORD = "Mathys2.0";
 
-interface Question {
-  id: number;
-  texte: string;
-  reponses: Reponse[];
-  attempts: number;
-  completed: boolean;
-  isRetry?: boolean;
-}
+export default function LoginPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [nom, setNom] = useState("");
 
-interface Feedback {
-  message: string;
-  type: "success" | "error";
-}
+  const handleLogin = async () => {
+    setError("");
 
-export default function Quiz() {
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [failedQuestions, setFailedQuestions] = useState<Question[]>([]);
-  const [answered, setAnswered] = useState<number[]>([]);
-  const [currentIndex, setCurrentIndex] = useState<number>(0);
-  const [score, setScore] = useState<number>(0);
-  const [quizFinished, setQuizFinished] = useState<boolean>(false);
-  const [feedback, setFeedback] = useState<Feedback | null>(null);
-  const [theme, setTheme] = useState<string>("light");
+    if (!email) return setError("Merci de mettre un email");
 
-  useEffect(() => {
-    async function fetchQuestions() {
-      const { data, error } = await supabase
-        .from("question")
-        .select(`id, texte, reponses:reponse(id, texte, bonne_reponse)`);
-
-      if (error) {
-        console.error(error);
-        return;
+    // LOGIN ADMIN
+    if (email === ADMIN_EMAIL) {
+      if (password === ADMIN_PASSWORD) {
+        localStorage.setItem("joueurEmail", email);
+        router.push("/admin");
+      } else {
+        setError("Mot de passe admin incorrect");
       }
-
-      const formatted: Question[] = data.map((q: any) => ({
-        ...q,
-        attempts: 0,
-        completed: false,
-      }));
-
-      setQuestions(formatted);
+      return;
     }
 
-    fetchQuestions();
-  }, []);
+    // LOGIN JOUEUR
+    const { data } = await supabase
+      .from("joueur")
+      .select("*")
+      .eq("email", email)
+      .single();
 
-  const showFeedback = (message: string, type: "success" | "error") => {
-    setFeedback({ message, type });
-    setTimeout(() => setFeedback(null), 1500);
-  };
-
-  const handleClick = (reponse: Reponse) => {
-    if (!questions[currentIndex]) return;
-
-    const updatedQuestions = [...questions];
-    const updatedFailed = [...failedQuestions];
-    const currentQ = { ...updatedQuestions[currentIndex] };
-    currentQ.attempts += 1;
-
-    if (reponse.bonne_reponse) {
-      currentQ.completed = true;
-      showFeedback("Bonne réponse ! ✅", "success");
-      setScore(prev => prev + 1);
-      setAnswered(prev => [...prev, currentQ.id]);
-      const newQuestions = updatedQuestions.filter(q => q.id !== currentQ.id);
-      const newFailed = updatedFailed.filter(q => q.id !== currentQ.id);
-      setQuestions(newQuestions);
-      setFailedQuestions(newFailed);
+    if (data) {
+      // Joueur existe
+      localStorage.setItem("joueurEmail", email);
+      router.push("/quiz");
     } else {
-      showFeedback("Mauvaise réponse ❌", "error");
-      if (!updatedFailed.find(q => q.id === currentQ.id)) updatedFailed.push(currentQ);
-      setFailedQuestions(updatedFailed);
-    }
-
-    // Si plus de questions restantes, retry des questions ratées
-    if (updatedQuestions.length > 0) {
-      setCurrentIndex(prev => (prev >= updatedQuestions.length ? updatedQuestions.length - 1 : prev));
-    } else if (updatedFailed.length > 0) {
-      const retryQs = updatedFailed.map(q => ({ ...q, isRetry: true }));
-      setQuestions(retryQs);
-      setFailedQuestions([]);
-      setCurrentIndex(0);
-    } else {
-      setQuizFinished(true);
+      setError("Joueur non trouvé. Veuillez vous inscrire.");
     }
   };
 
-  if (quizFinished) {
-    return (
-      <div className={`min-h-screen p-6 ${theme === "light" ? "bg-white text-black" : "bg-gray-900 text-white"}`}>
-        <div className="max-w-xl mx-auto text-center">
-          <h2 className="text-2xl font-bold mb-4">🎉 Quiz terminé !</h2>
-          <p className="mb-4">Score : {score}</p>
-          <Button
-            onClick={() => {
-              const allQs = [...questions, ...failedQuestions].map(q => ({ ...q, attempts: 0, completed: false }));
-              setQuestions(allQs);
-              setFailedQuestions([]);
-              setAnswered([]);
-              setScore(0);
-              setQuizFinished(false);
-              setCurrentIndex(0);
-            }}
-          >
-            Rejouer
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  const handleRegister = async () => {
+    setError("");
 
-  const currentQuestion = questions[currentIndex];
-  if (!currentQuestion) return <p className={`min-h-screen p-6 ${theme === "light" ? "bg-white text-black" : "bg-gray-900 text-white"}`}>Chargement...</p>;
+    if (!nom || !email) return setError("Merci de remplir le nom et l'email");
+
+    // Vérifie si le joueur existe déjà
+    const { data: existing } = await supabase
+      .from("joueur")
+      .select("*")
+      .eq("email", email)
+      .single();
+
+    if (existing) {
+      return setError("Ce joueur existe déjà, essayez de vous connecter.");
+    }
+
+    // Ajoute le joueur à la table joueur
+    const { error } = await supabase.from("joueur").insert({
+      nom,
+      email
+    });
+
+    if (error) {
+      setError("Erreur lors de l'inscription.");
+    } else {
+      localStorage.setItem("joueurEmail", email);
+      router.push("/quiz");
+    }
+  };
 
   return (
-    <div className={`min-h-screen p-6 transition ${theme === "light" ? "bg-white text-black" : "bg-gray-900 text-white"}`}>
-      <div className="flex justify-end mb-4">
-        <Button onClick={() => setTheme(theme === "light" ? "dark" : "light")}>{theme === "light" ? "🌙 Nuit" : "☀️ Jour"}</Button>
-      </div>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="border p-8 rounded-xl shadow-lg w-full max-w-sm bg-white dark:bg-gray-800">
+        <h2 className="text-2xl font-bold text-center mb-6">
+          {isRegistering ? "Inscription" : "Connexion"}
+        </h2>
 
-      <div className="max-w-xl mx-auto">
-        <AnimatePresence>
-          <motion.div key={currentQuestion.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <Card className={`p-4 rounded-2xl mb-4 ${currentQuestion.isRetry ? "bg-orange-100 dark:bg-orange-600" : "bg-white dark:bg-gray-800"}`}>
-              <CardHeader>
-                <CardTitle>Question {currentIndex + 1}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="mb-4">{currentQuestion.texte}</p>
-                {currentQuestion.reponses.map(r => (
-                  <Button key={r.id} className="w-full mb-2" onClick={() => handleClick(r)}>
-                    {r.texte}
-                  </Button>
-                ))}
-                {feedback && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    className={`mt-2 p-2 rounded text-center font-semibold ${
-                      feedback.type === "success" ? "bg-green-500 text-white" : "bg-red-500 text-white"
-                    }`}
-                  >
-                    {feedback.message}
-                  </motion.div>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
-        </AnimatePresence>
+        {isRegistering && (
+          <Input
+            type="text"
+            placeholder="Nom"
+            value={nom}
+            onChange={(e) => setNom(e.target.value)}
+            className="mb-4"
+          />
+        )}
+
+        <Input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="mb-4"
+        />
+
+        {email === ADMIN_EMAIL && !isRegistering && (
+          <Input
+            type="password"
+            placeholder="Mot de passe admin"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="mb-4"
+          />
+        )}
+
+        {error && <p className="text-red-500 mb-4">{error}</p>}
+
+        {isRegistering ? (
+          <Button className="w-full" onClick={handleRegister}>
+            S'inscrire
+          </Button>
+        ) : (
+          <Button className="w-full" onClick={handleLogin}>
+            Se connecter
+          </Button>
+        )}
+
+        <p className="text-sm text-center mt-4 text-gray-500">
+          {isRegistering ? (
+            <span>
+              Vous avez déjà un compte ?{" "}
+              <button
+                className="text-blue-500 underline"
+                onClick={() => setIsRegistering(false)}
+              >
+                Connectez-vous
+              </button>
+            </span>
+          ) : (
+            <span>
+              Nouveau joueur ?{" "}
+              <button
+                className="text-blue-500 underline"
+                onClick={() => setIsRegistering(true)}
+              >
+                Inscrivez-vous
+              </button>
+            </span>
+          )}
+        </p>
       </div>
     </div>
   );
