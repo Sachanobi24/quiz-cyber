@@ -7,8 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/lib/supabaseClient";
 
-const ADMIN_EMAIL = "admin"; // email ou identifiant admin
-
 type Reponse = {
   id: number;
   texte: string;
@@ -34,12 +32,13 @@ export default function AdminPage() {
   // ------------------------
   useEffect(() => {
     const email = localStorage.getItem("joueurEmail"); // email ou identifiant stocké
-    if (email !== ADMIN_EMAIL) {
-      router.push("/"); // redirection si pas admin
-    } else {
+    if (email) {
+      router.push("/admin"); // redirection si admin
       setIsAuth(true);
       fetchQuestions();
       fetchStats();
+    } else {
+      router.push("/quiz"); // redirection si PAS admin
     }
   }, [router]);
 
@@ -175,7 +174,7 @@ export default function AdminPage() {
                   </div>
                 ))}
                 <Button className="mt-2" variant="secondary" onClick={() => addReponse(q.id)}>
-                  ➕ Ajouter une réponse
+                   Ajouter une réponse
                 </Button>
               </div>
             </div>

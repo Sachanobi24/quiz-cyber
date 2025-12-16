@@ -6,9 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 
-const ADMIN_EMAIL = "admin";
-const ADMIN_PASSWORD = "Mathys2.0";
-
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -17,47 +14,73 @@ export default function LoginPage() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [nom, setNom] = useState("");
 
+  async function signInWithEmail(email: string, password: string) {
+    const { data, error: loginerror } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: password,
+    })
+    return { data, loginerror }
+  }
+
   const handleLogin = async () => {
     setError("");
     console.log("handleLogin", { email });
 
     if (!email) return setError("Merci de mettre un email");
 
-    if (email === ADMIN_EMAIL) {
-      if (password === ADMIN_PASSWORD) {
-        localStorage.setItem("joueurEmail", email);
-        router.push("/admin");
-      } else {
-        setError("Mot de passe admin incorrect");
+    // if (email === ADMIN_EMAIL) {
+    //   if (password === ADMIN_PASSWORD) {
+    //     localStorage.setItem("joueurEmail", email);
+    //     router.push("/admin");
+    //   } else {
+    //     setError("Mot de passe admin incorrect");
+    //   }
+    //   return;
+    // }
+
+    const { data, loginerror } = await signInWithEmail(email, password);
+
+    console.log('data', data);
+    console.log('loginerror', loginerror);
+      
+    if (data.user != null) {
+      localStorage.setItem("joueurEmail", email);
+      router.push("/admin");
+    } else {
+      setError("Mot de passe admin incorrect");
+
+      try {
+        const resp = await supabase
+          .from("joueur")
+          .select("*")
+          .eq("email", email)
+          .single();
+
+        console.log("supabase login response:", resp);
+
+        if (resp.error) {
+          // erreur précisée par supabase
+          setError(resp.error.message || "Erreur Supabase lors de la recherche");
+          return;
+        }
+
+        if (resp.data) {
+          localStorage.setItem("joueurEmail", email);
+          router.push("/quiz");
+        } else {
+          setError("Joueur non trouvé. Veuillez vous inscrire.");
+        }
+      } catch (err) {
+        console.error("Exception login:", err);
+        setError("Erreur lors de la requête. Voir console devtools.");
       }
-      return;
     }
 
-    try {
-      const resp = await supabase
-        .from("joueur")
-        .select("*")
-        .eq("email", email)
-        .single();
 
-      console.log("supabase login response:", resp);
 
-      if (resp.error) {
-        // erreur précisée par supabase
-        setError(resp.error.message || "Erreur Supabase lors de la recherche");
-        return;
-      }
 
-      if (resp.data) {
-        localStorage.setItem("joueurEmail", email);
-        router.push("/quiz");
-      } else {
-        setError("Joueur non trouvé. Veuillez vous inscrire.");
-      }
-    } catch (err) {
-      console.error("Exception login:", err);
-      setError("Erreur lors de la requête. Voir console devtools.");
-    }
+
+
   };
 
   const handleRegister = async () => {
@@ -138,15 +161,14 @@ export default function LoginPage() {
           className="mb-4"
         />
 
-        {email === ADMIN_EMAIL && !isRegistering && (
-          <Input
-            type="password"
-            placeholder="Mot de passe admin"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mb-4"
-          />
-        )}
+        <Input
+          type="password"
+          placeholder="Mot de passe"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="mb-4"
+        />
+
 
         {error && <p className="text-red-500 mb-4">{error}</p>}
 
